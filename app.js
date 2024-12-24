@@ -3,7 +3,7 @@ import express from "express";
 import bodyParser from "body-parser";
 import mongoose from "mongoose";
 import { connectDB } from "./config/db.js";
-import md5 from "md5";
+import bcrypt from "bcryptjs";
 
 configDotenv();
 
@@ -42,12 +42,15 @@ app
   .post(async function (req, res) {
     const { username, password } = req.body;
 
-    const newUser = new User({
-      email: username,
-      password: md5(password),
-    });
-
     try {
+      var salt = await bcrypt.genSalt(11);
+      var hash = await bcrypt.hash(password, salt);
+
+      const newUser = new User({
+        email: username,
+        password: hash,
+      });
+
       const savedUser = await newUser.save();
       console.log("Saved User", savedUser);
       res.render("secrets");
@@ -75,7 +78,9 @@ app
           .json({ Error: "User not found with this email" });
       }
 
-      if (md5(password) === existingUser.password) {
+      var result = await bcrypt.compare(password, existingUser.password);
+
+      if (result) {
         res.render("secrets");
       } else {
         res.status(400).json({ Error: "Incorrect password! Try Again!" });
