@@ -3,6 +3,7 @@ import express from "express";
 import bodyParser from "body-parser";
 import mongoose from "mongoose";
 import { connectDB } from "./config/db.js";
+import md5 from "md5";
 
 configDotenv();
 
@@ -11,7 +12,6 @@ const app = express();
 connectDB();
 
 // user schema
-
 const userSchema = new mongoose.Schema({
   email: { type: String, unique: true, required: true },
   password: { type: String, required: true, minLength: 8 },
@@ -44,7 +44,7 @@ app
 
     const newUser = new User({
       email: username,
-      password: password,
+      password: md5(password),
     });
 
     try {
@@ -75,7 +75,7 @@ app
           .json({ Error: "User not found with this email" });
       }
 
-      if (password === existingUser.password) {
+      if (md5(password) === existingUser.password) {
         res.render("secrets");
       } else {
         res.status(400).json({ Error: "Incorrect password! Try Again!" });

@@ -4,6 +4,7 @@
     "dotenv": "^16.4.7",
     "ejs": "^3.1.10",
     "express": "^4.21.2",
+    "md5": "^2.3.0",
     "mongoose": "^8.9.2"
   },
   "name": "secrets---starting-code",
@@ -11,7 +12,7 @@
   "type": "module",
   "main": "app.js",
   "scripts": {
-    "start" : "nodemon app.js"
+    "start": "nodemon app.js"
   },
   "keywords": [],
   "author": "",
