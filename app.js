@@ -4,6 +4,10 @@ import bodyParser from "body-parser";
 import mongoose from "mongoose";
 import { connectDB } from "./config/db.js";
 import bcrypt from "bcryptjs";
+import session from "express-session";
+import passport from "passport";
+import passportLocal from "passport-local";
+const LocalStrategy = passportLocal.Strategy;
 
 configDotenv();
 
@@ -13,7 +17,7 @@ connectDB();
 
 // user schema
 const userSchema = new mongoose.Schema({
-  email: { type: String, unique: true, required: true },
+  username: { type: String, unique: true, required: true },
   password: { type: String, required: true, minLength: 8 },
 });
 
@@ -26,6 +30,67 @@ app.set("view engine", "ejs");
 app.use(express.static("public"));
 // body parser
 app.use(bodyParser.urlencoded({ extended: true }));
+
+function ensureAuthenticated(req, res, next) {
+  if (req.isAuthenticated()) {
+    return next();
+  }
+  res.redirect("/login");
+}
+
+app.use(
+  session({
+    secret: process.env.SECRET,
+    resave: false,
+    saveUninitialized: true,
+    cookie: {
+      maxAge: 24 * 60 * 60 * 1000,
+    },
+  })
+);
+
+app.use(passport.initialize());
+app.use(passport.session());
+
+passport.use(
+  new LocalStrategy({ usernameField: "username" }, async function (
+    username,
+    password,
+    cb
+  ) {
+    try {
+      const user = await User.findOne({ username });
+
+      console.log("strategy : user :", user);
+
+      if (!user) {
+        return cb(null, false, { message: "Incorrect email!" });
+      }
+
+      const isValidPassword = await bcrypt.compare(password, user.password);
+      console.log("strategy : isValidPassword :", isValidPassword);
+      if (!isValidPassword) {
+        return cb(null, false, { message: "Incorrect Password!" });
+      }
+
+      cb(null, user, { message: "Logged In" });
+    } catch (err) {
+      return cb(err);
+    }
+  })
+);
+
+passport.serializeUser(function (user, cb) {
+  cb(null, user.id);
+});
+passport.deserializeUser(async function (id, cb) {
+  try {
+    const user = await User.findById(id);
+    cb(null, user);
+  } catch (err) {
+    cb(err, null);
+  }
+});
 
 // Routes
 // -- /home | root
@@ -43,19 +108,30 @@ app
     const { username, password } = req.body;
 
     try {
+      const exisitngUser = await User.findOne({ username });
+      if (exisitngUser) {
+        return res.status(400).json({ error: "Username already exists" });
+      }
       var salt = await bcrypt.genSalt(11);
       var hash = await bcrypt.hash(password, salt);
 
       const newUser = new User({
-        email: username,
+        username: username,
         password: hash,
       });
 
       const savedUser = await newUser.save();
       console.log("Saved User", savedUser);
-      res.render("secrets");
+      req.login(savedUser, (err) => {
+        if (err) {
+          res
+            .status(400)
+            .json({ error: "Error logging in after  registration" });
+        }
+        return res.redirect("/secrets");
+      });
     } catch (err) {
-      res.status(400).json({ error: "Error Creating new user" });
+      return res.status(500).json({ error: "Error Creating new user" });
     }
   });
 // -- /login
@@ -64,31 +140,30 @@ app
   .get(function (req, res) {
     res.render("login");
   })
-  .post(async function (req, res) {
-    const { username, password } = req.body;
+  .post(
+    passport.authenticate("local", {
+      successRedirect: "/secrets",
+      failureRedirect: "/login",
+      failureFlash: false,
+    })
+  );
 
-    let existingUser;
-    try {
-      existingUser = await User.findOne({ email: username });
-      console.log("Existing user =>", existingUser);
+app.route("/secrets").get(ensureAuthenticated, function (req, res) {
+  res.render("secrets");
+});
 
-      if (!existingUser) {
-        return res
-          .status(404)
-          .json({ Error: "User not found with this email" });
-      }
-
-      var result = await bcrypt.compare(password, existingUser.password);
-
-      if (result) {
-        res.render("secrets");
-      } else {
-        res.status(400).json({ Error: "Incorrect password! Try Again!" });
-      }
-    } catch (err) {
-      res.status(400).json({ Error: "Something went wrong!" });
+app.route("/logout").get(async function (req, res) {
+  req.logout(function (err) {
+    if (err) {
+      return next(err);
     }
+    res.redirect("/");
   });
+});
+
+app.route("/submit").get(ensureAuthenticated, function (req, res) {
+  res.render("submit");
+});
 
 app.listen(process.env.PORT || 3000, function () {
   console.log("Server started on port", process.env.PORT);

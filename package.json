@@ -5,8 +5,11 @@
     "dotenv": "^16.4.7",
     "ejs": "^3.1.10",
     "express": "^4.21.2",
+    "express-session": "^1.18.1",
     "md5": "^2.3.0",
-    "mongoose": "^8.9.2"
+    "mongoose": "^8.9.2",
+    "passport": "^0.7.0",
+    "passport-local": "^1.0.0"
   },
   "name": "secrets---starting-code",
   "version": "1.0.0",
